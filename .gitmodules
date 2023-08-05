@@ -1,0 +1,3 @@
+[submodule "server_broadcasting_py"]
+	path = server_broadcasting_py
+	url = git@github.com:bfs15/server_broadcasting_py.git

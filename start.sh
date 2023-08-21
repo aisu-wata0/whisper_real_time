@@ -1,0 +1,1 @@
+python transcribe_demo.py -m "CABLE Output" --task transcribe --language en --model_name medium

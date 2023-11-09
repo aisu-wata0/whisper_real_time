@@ -2,3 +2,4 @@
 *.log
 *.pyd
 *.pyc
+.mypy_cache/

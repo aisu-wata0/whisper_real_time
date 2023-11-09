@@ -22,6 +22,8 @@ from fuzzywuzzy import process
 
 from sortedcontainers import SortedDict
 
+f_log_file = None
+
 def re_join(regex_list):
     """Joins a list into non-capturing groups"""
     joined_regex = '|'.join(f'(?:{pattern})' for pattern in regex_list)
@@ -53,9 +55,9 @@ def consecutive_repeat_truncate(arr, limit):
     return arr_new
 
 
-def do_tuples_overlap(tuple1, tuple2):
+def do_tuples_overlap(tuple1: tuple[Any, Any], tuple2: tuple[Any, Any]):
     # Sort the tuples based on their first element to ensure tuple1[0] <= tuple2[0]
-    tuple1, tuple2 = sorted([tuple1, tuple2])
+    tuple1, tuple2 = sorted((tuple1, tuple2,))
 
     # Check for overlap
     if tuple1[1] > tuple2[0]:
@@ -86,7 +88,8 @@ def register_data_chunk(
     overlapped = has_overlapping_intervals(registered_data_dict, start, end)
     if overlapped:
         should_override = override(data, overlapped)
-        print("should_override=", should_override, data)
+        if f_log_file:
+            f_log_file.write(f"should_override={should_override}; {data}; overlapped={overlapped}")
         if not should_override:
             return overlapped
 
@@ -387,6 +390,7 @@ def do_it(args):
             audio_clip = {
                 "waveFilename": waveFilename,
                 "waveFilepath": waveFilepath,
+                "data": None,
                 "info": {
                     "length": len(frames),
                     "idx": file_idx,
@@ -435,7 +439,7 @@ def do_it(args):
     
     token_repeat_limit = 40
     character_repeat_truncate = 20
-    log_prob_threshold = -1.0
+    log_prob_threshold = -1.1
 
     transcribe_kwargs = dict(
         # initial_prompt="desu",
@@ -567,16 +571,42 @@ def do_it(args):
         Also checks for matches between both texts,
         to add text from the overridden into the kept entry.
         """
+        START_LENIENCE = 0.6
+        # End lenience is slightly bigger because transcriptions can end in "..."
+        END_LENIENCE = 1.0
+        
+        competing_is_not_finished = (
+            completed_segments[overlapped[-1]][1]["last"]
+            and completed_segments[overlapped[-1]][1]["end_silence"] < END_LENIENCE
+        )
+        if competing_is_not_finished:
+            return True
+
         r = (
-            # Start is not too early in the audio clip
-            data["start"] > 0.6
-            and (
-                # Not last, or competing is also last
-                not data["last"]
-                or (completed_segments[overlapped[-1]][1]["last"])
+            (
+                (
+                    # Start is not too early in the audio clip
+                    (data["start"] > START_LENIENCE)
+                    and
+                    (
+                        # Not last
+                        not data["last"]
+                        # Or it has enough silence after transcription ("finished")
+                        or (data["last"] and data["end_silence"] > END_LENIENCE)
+                    )
+                )
                 or
-                # Or it has enough silence after transcription
-                (data["last"] and data["end_silence"] > 0.6)
+                # Segment is the entire length of the clip (i.e. started at ~0 and ended at ~full length)
+                (
+                    # Start is early in the audio clip
+                    (data["start"] <= START_LENIENCE)
+                    and
+                    (
+                        # last
+                        data["last"]
+                        # Or it has NOT enough silence after transcription (not "finished")
+                        or (data["last"] and data["end_silence"] <= END_LENIENCE))
+                )
             )
         )
         if not r:
@@ -639,8 +669,8 @@ def do_it(args):
             prepend_words, append_words = split_match_get_additions(
                 old, new, split_match
             )
-
-            print(
+            
+            f_log_file.write(
                 json.dumps(
                     {
                         "kept": kept,
@@ -650,7 +680,7 @@ def do_it(args):
                         "new": new,
                         "split_match": split_match,
                     }
-                )
+                ) + "\n"
             )
 
             if kept == "data":
@@ -684,11 +714,11 @@ def do_it(args):
             audio_clip_history.append(audio_clip["info"])
             data = (
                 audio_clip["data"]
-                if ("data" in audio_clip and audio_clip["data"])
+                if (audio_clip["data"])
                 else audio_clip["waveFilepath"]
             )
-            print("\t\t\t", f"info={audio_clip['info']}")
-            print("\t\t\t", f"data={data}")
+            # print("\t\t\t", f"info={audio_clip['info']}")
+            # print("\t\t\t", f"data={data}")
 
             result: dict[str, Any] = {}
             try:
@@ -704,6 +734,8 @@ def do_it(args):
                     )
                 )
             except Exception as e:
+                print(f'Error on transcribe "{data}"')
+                print(e)
                 logging.exception(f'Error on transcribe "{data}"')
             
             if not result:
@@ -716,6 +748,7 @@ def do_it(args):
             print(
                 "\t\t\t",
                 f"elapsed_time = {elapsed_time:.3f} seconds; "
+                f"{audio_clip['waveFilepath']};",
                 f"audio_stream_queue_size = {audio_stream_queue.qsize()};",
             )
 
@@ -729,17 +762,25 @@ def do_it(args):
                     re.compile(
                         re_join([
                             # "This video is a derivative work of Touhou Project. It has been made by the same company as Touhou Project",
+                            "The following footage is from a work of fiction.",
+                            "It contains strong language and adult-like characters.",
+                            "Please do not imitate if you are not familiar with this work.",
+                            "Viewer discretion is advised.",
                             "Touhou Project",
                             "Thank you for watching",
+                            "I'm sorry for the inconvenience.",
                             "Thanks for watching",
                             "I'm sorry, I'm sorry.",
                             "I'm sorry for the poor quality of this video, it's not really my style.",
                             "I'm sorry for the poor quality of the video.",
+                            "I'm sorry for the bad quality of this video.",
                             "I'm sorry for the bad quality of the video.",
                             "I'm sorry for any inconvenience.",
                             "I'm sorry for the bad sound.",
                             "I'm sorry for the noise.",
                             "I'm sorry for the bad translation.",
+                            "I'm sorry for the poor translation.",
+                            " 字幕は視聴者によって作成されました。",
                             "Please subscribe",
                             "PLEASE LIKE, COMMENT, and SUBSCRIBE",
                             "Please subscribe to my channel",
@@ -747,6 +788,7 @@ def do_it(args):
                             "Translation by",
                             "Translation by Releska",
                             "Translated by Releska",
+                            "Translated by 方 Hou",
                         ]),
                         re.IGNORECASE,
                     ),
@@ -776,7 +818,7 @@ def do_it(args):
 
                 result["segments"] = [
                     {**s, "text": consecutive_repeat_truncate(s["text"], character_repeat_truncate)}                    
-                    for s in filtered_segments if s["text"].strip(" .!?")
+                    for s in filtered_segments if s["text"].strip(" .!?\u200B")
                 ]
 
                 result["text"] = "\n".join((s["text"] for s in result["segments"]))
@@ -825,6 +867,14 @@ def do_it(args):
 
             result = timestamp_segments(result)
 
+
+            def seg_format(seg):
+                return (
+                    seg["text"]
+                    + "\t\t\t -- "
+                    + f" prob={seg['avg_logprob']:0.5f}   {seg['start_global']-start_time_global:0.2f} : {seg['end_global']-start_time_global:0.2f}  {seg['end_silence']:0.2f}  last={seg['last']}"
+                )
+
             if "segments" in result:
                 for s in result["segments"]:
                     print(s["text"])
@@ -851,13 +901,6 @@ def do_it(args):
             audio_max_diff_start = 0.05
             audio_max_diff_end = 0.05
             text_ratio_min = 90
-
-            def seg_format(seg):
-                return (
-                    seg["text"]
-                    + " -- "
-                    + f"{seg['start_global']-start_time_global:0.5f} : {seg['end_global']-start_time_global:0.5f}  {seg['end_silence']:0.5f} {seg['last']:0.5f} {seg['avg_logprob']:0.5f} "
-                )
 
             def is_segment_similar_start(
                 seg_a,
@@ -993,7 +1036,7 @@ def do_it(args):
                 ):
                     segment = result_history[result_idx]["segments"][seg_idx]
                     if segment["avg_logprob"] < log_prob_threshold:
-                        print("Too low prob", seg_format(segment))
+                        f_log_file.write(f"Segment: Too low prob; {seg_format(segment)}" + "\n")
                         return
                     completed_segments_idxs[result_idx][seg_idx] = True
                     segment["complete"] = True
@@ -1008,7 +1051,7 @@ def do_it(args):
                         else:
                             completed.append(segment["start_global"])
                     else:
-                        print("Not registered", seg_format(segment))
+                        f_log_file.write(f"Segment: Not registered; {seg_format(segment)}" + "\n")
 
                 if len(result_history) <= 1:
                     return {
@@ -1145,8 +1188,8 @@ def do_it(args):
                                 if is_segment_in_the_zone(
                                     result_history[-2]["segments"][i]
                                 ):
-                                    print(
-                                        f"\t\tCompleting segment with no overlap {-2, i,}"
+                                    f_log_file.write(
+                                        f"\t\tCompleting segment with no overlap {-2, i,}" + "\n"
                                     )
                                     complete_segment(-2, i, True)
 
@@ -1197,7 +1240,7 @@ def do_it(args):
                 print("\t\t latest")
                 for seg in get_last_segments(completed_segments, print_last_x_seconds):
                     print(seg_format(seg))
-
+                print('', end='', flush=True)
                 if args.audio_cut_on_complete_phrase:
                     phrase_complete_queue.put(segment_updates)
             

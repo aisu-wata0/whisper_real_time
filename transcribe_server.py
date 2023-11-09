@@ -46,9 +46,8 @@ if __name__ == "__main__":
                     **tr_update,
                     "timestamp": timestamp,
                 }
-                json_str = json.dumps(data_to_broadcast)
-                print(f"json_str\n{len(json_str)}\n{json_str}")
-                logger.info(json_str)
+                # json_str = json.dumps(data_to_broadcast)
+                # logger.info(json_str)
                 server.broadcast(data_to_broadcast)
 
                 transcription_queue.task_done()

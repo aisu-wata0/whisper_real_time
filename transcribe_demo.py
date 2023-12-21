@@ -439,7 +439,7 @@ def do_it(args):
     
     token_repeat_limit = 40
     character_repeat_truncate = 20
-    log_prob_threshold = -1.1
+    log_prob_threshold = -1.05
 
     transcribe_kwargs = dict(
         # initial_prompt="desu",
@@ -760,34 +760,28 @@ def do_it(args):
                 filtered_re=[
                     re.compile(
                         re_join([
-                            # "This video is a derivative work of Touhou Project. It has been made by the same company as Touhou Project",
+                            "I'm (so )?sorry for ((the|any) )((poor|bad) )?(quality of )?((this|the|my) )?(sound|video|noise|translation|inconvenience)s?.?",
+                            "Thank you for watching",
+                            "Thanks for watching",
+                            "I'm sorry, I'm sorry.",
+                            "Please subscribe",
+                            "PLEASE LIKE, COMMENT, and SUBSCRIBE",
+                            "Don't forget to like and subscribe",
+                            "Please subscribe to my channel",
+                            "Hello everyone.? welcome to my channel",
                             "The following footage is from a work of fiction.",
                             "It contains strong language and adult-like characters.",
                             "Please do not imitate if you are not familiar with this work.",
                             "Viewer discretion is advised.",
-                            "Touhou Project",
-                            "Thank you for watching",
-                            "I'm sorry for the inconvenience.",
-                            "Thanks for watching",
-                            "I'm sorry, I'm sorry.",
-                            "I'm (so )?sorry for the (poor|bad) quality of (this|the|my) videos?.?",
-                            "I'm sorry for any inconvenience.",
-                            "I'm sorry for the bad sound.",
-                            "I'm sorry for the noise.",
-                            "I'm sorry for the bad translation.",
-                            "I'm sorry for the poor translation.",
-                            " 字幕は視聴者によって作成されました。",
-                            "Please subscribe",
-                            "PLEASE LIKE, COMMENT, and SUBSCRIBE",
-                            "Don't forget to like and subscribe",
+                            "字幕は視聴者によって作成されました",
                             "I hope you enjoy this video",
-                            "Please subscribe to my channel",
-                            "Hello everyone.? welcome to my channel",
                             "Lyrics by",
                             "Translation by",
                             "Translation by Releska",
                             "Translated by Releska",
                             "Translated by 方 Hou",
+                            "Touhou Project",
+                            # "This video is a derivative work of Touhou Project. It has been made by the same company as Touhou Project",
                         ]),
                         re.IGNORECASE,
                     ),

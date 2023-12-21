@@ -745,12 +745,11 @@ def do_it(args):
 
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print(
-                "\t\t\t",
-                f"elapsed_time = {elapsed_time:.3f} seconds; "
-                f"{audio_clip['waveFilepath']};",
-                f"audio_stream_queue_size = {audio_stream_queue.qsize()};",
-            )
+
+            print_str = ""
+            print_str += (
+                f"""\n\t\t\t elapsed_time = {elapsed_time:.3f} seconds;  {audio_clip['waveFilepath']};  audio_stream_queue_size = {audio_stream_queue.qsize()};"""
+            ) + "\n"
 
             # {	'text': 'ないさ ないさ そう 怒るよ 今', 'segments': [
             # {'id': 0, 'seek': 0, 'start': 0.0, 'end': 3.9, 'text': 'ないさ ないさ そう 怒るよ 今', 'tokens': [50364, 9311, 6722, 16647, 1764, 6722, 36165, 220, 3757, 240, 4895, 5591, 220, 6480, 50559], 'temperature': 0.0, 'avg_logprob': -0.4631863236427307, 'compression_ratio': 1.0, 'no_speech_prob': 0.8474944829940796}], 'language': 'ja'}
@@ -771,10 +770,7 @@ def do_it(args):
                             "I'm sorry for the inconvenience.",
                             "Thanks for watching",
                             "I'm sorry, I'm sorry.",
-                            "I'm sorry for the poor quality of this video, it's not really my style.",
-                            "I'm sorry for the poor quality of the video.",
-                            "I'm sorry for the bad quality of this video.",
-                            "I'm sorry for the bad quality of the video.",
+                            "I'm (so )?sorry for the (poor|bad) quality of (this|the|my) videos?.?",
                             "I'm sorry for any inconvenience.",
                             "I'm sorry for the bad sound.",
                             "I'm sorry for the noise.",
@@ -783,7 +779,10 @@ def do_it(args):
                             " 字幕は視聴者によって作成されました。",
                             "Please subscribe",
                             "PLEASE LIKE, COMMENT, and SUBSCRIBE",
+                            "Don't forget to like and subscribe",
+                            "I hope you enjoy this video",
                             "Please subscribe to my channel",
+                            "Hello everyone.? welcome to my channel",
                             "Lyrics by",
                             "Translation by",
                             "Translation by Releska",
@@ -876,8 +875,9 @@ def do_it(args):
                 )
 
             if "segments" in result:
+                print_str += "\n"
                 for s in result["segments"]:
-                    print(s["text"])
+                    print_str += str(s["text"]) + "\n"
             result_history.append(result)
 
             w = ""
@@ -1220,29 +1220,42 @@ def do_it(args):
                     f"{json.dumps(dict(phrase_complete=segment_updates), indent=None,)}\n"
                 )
 
-                print("\n\n")
-                print("\t\tupdates")
+                print_str += "\n"
+                print_str += "\t\tupdates\n"
                 if "updates" in segment_updates:
                     for c in segment_updates["updates"]:
-                        print(seg_format(completed_segments[c][1]))
+                        print_str += str(seg_format(completed_segments[c][1])) + "\n"
 
-                print("\t\tcompleted")
+                print_str += str("\t\tcompleted") + "\n"
                 if "completed" in segment_updates:
                     for c in segment_updates["completed"]:
-                        print(seg_format(completed_segments[c][1]))
+                        print_str += str(seg_format(completed_segments[c][1])) + "\n"
 
-                print("\t\tincomplete_segments")
+                print_str += str("\t\tincomplete_segments") + "\n"
                 for seg in segment_updates["incomplete_segments"]:
-                    print(seg_format(seg))
+                    print_str += str(seg_format(seg)) + "\n"
 
                 print_last_x_seconds = 120
-                print("\n")
-                print("\t\t latest")
+                print_str += str("\n") + "\n"
+                print_str += str("\t\t latest") + "\n"
                 for seg in get_last_segments(completed_segments, print_last_x_seconds):
-                    print(seg_format(seg))
-                print('', end='', flush=True)
+                    print_str += str(seg_format(seg)) + "\n"
+                
+                print(print_str, end='', flush=True)
+
                 if args.audio_cut_on_complete_phrase:
                     phrase_complete_queue.put(segment_updates)
+
+                        
+            w = ""
+            w += (
+                json.dumps(
+                    dict(segment_updates=segment_updates),
+                    indent=None,
+                )
+                + "\n"
+            )
+            f_log_file.write(w)
             
             if had_updates:
                 transcription_queue.put({
